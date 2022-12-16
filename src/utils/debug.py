@@ -18,7 +18,7 @@ def check_env_inputs(args):
     check_list_elements(x=args.snake_body_color, num_elements=3, parent='snake_body_color', mins=color_mins, maxs=color_maxs)
     check_list_elements(x=args.snake_head_color, num_elements=3, parent='snake_head_color', mins=color_mins, maxs=color_maxs)
     check_list_elements(x=args.food_color, num_elements=3, parent='food_color', mins=color_mins, maxs=color_maxs)
-    check_int_value(x=args.snake_init_length, parent='snake_init_length', minimum=1, maximum=4)  # TODO: Increase Maximum
+    check_int_value(x=args.snake_init_length, parent='snake_init_length', minimum=1, maximum=20)  # TODO: Increase Maximum
     check_int_value(x=args.num_init_foods, parent='num_init_foods', minimum=1, maximum=100)  # TODO: Increase Maximum
     args.pygame_cell_size, args.pygame_display_size = check_display_size(board_size=args.board_size, pygame_cell_size=args.pygame_cell_size)
 
@@ -67,17 +67,3 @@ def check_display_size(board_size, pygame_cell_size):
     pygame_display_size = [board_size[0] * pygame_cell_size[0], board_size[1] * pygame_cell_size[1]]
 
     return pygame_cell_size, pygame_display_size
-
-
-# def check_snake_length(snake_init_length, board_size):
-#     if snake_init_length > max(board_size):
-#         snake_init_length = max(board_size) - 2
-#     return snake_init_length
-
-# def check_num_foods(num_init_foods, num_available_blocks):
-#
-#     if snake_init_length > max(board_size):
-#         snake_init_length = max(board_size) - 2
-#     return snake_init_length
-
-
