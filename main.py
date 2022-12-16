@@ -99,6 +99,6 @@ if __name__ == '__main__':
     print(args)
 
     env = SnakeGame(args=args)
-    agent = Agent(args=args)
+    # agent = Agent(args=args)
     engine = Engine(args=args, env=env)
     engine.play()
