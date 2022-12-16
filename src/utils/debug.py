@@ -2,14 +2,12 @@ import os
 import tkinter
 
 
-def check_env_inputs(args):
-
-    # Enabling pygame if player is user
-    if args.player == 'user':
-        args.use_pygame = True
+def check_inputs(args):
 
     color_mins = [0, 0, 0]
     color_maxs = [255, 255, 255]
+
+    check_path(x=args.root_path, parent='root_path')
     check_list_elements(x=args.pygame_cell_size, num_elements=2, parent='pygame_cell_size', mins=[1, 1])
     check_list_elements(x=args.board_size, num_elements=2, parent='board_size', mins=[4, 4])
     check_list_elements(x=args.background_color, num_elements=3, parent='background_color', mins=color_mins, maxs=color_maxs)

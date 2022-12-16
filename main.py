@@ -1,7 +1,10 @@
+import os
+import torch
 import argparse
 from tqdm import trange
-from src.RL.environments.games.snake_game import SnakeGame
 from src.utils import pgutils, debug
+from src.RL.environments.games.snake_game import SnakeGame
+from src.RL.agents.agent import Agent
 
 
 WHITE = [255, 255, 255]  # Background
@@ -40,8 +43,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DQN Snake Game')
 
     """ General Configs """
+    parser.add_argument('--session', default='Try1', type=str)
+    parser.add_argument('--seed', default=42, type=int)
+    parser.add_argument('--root_path', default=os.getcwd(), type=str)
     parser.add_argument('--player', default='agent', type=str, choices=['user', 'agent'])
-    parser.add_argument('--total_games', default=10, type=int)
+    parser.add_argument('--total_games', default=100, type=int)
 
     """ Environment Configs """
     # Pygame Configs
@@ -73,11 +79,26 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Check environment inputs
-    args = debug.check_env_inputs(args=args)
+    # Check inputs
+    args = debug.check_inputs(args=args)
+
+    # Enabling pygame if player is user
+    if args.player == 'user':
+        args.use_pygame = True
+
+    # Logs path and Models path
+    args.logs_path = os.path.join(args.root_path, 'checkpoints', args.session, 'logs')
+    args.models_path = os.path.join(args.root_path, 'checkpoints', args.session, 'models')
+
+    os.makedirs(name=args.logs_path, exist_ok=True)
+    os.makedirs(name=args.models_path, exist_ok=True)
+
+    # device
+    args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     print(args)
 
     env = SnakeGame(args=args)
+    agent = Agent(args=args)
     engine = Engine(args=args, env=env)
     engine.play()
