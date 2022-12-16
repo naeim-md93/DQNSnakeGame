@@ -1,5 +1,4 @@
 import argparse
-import tkinter as tk
 from tqdm import trange
 from src.RL.environments.games.snake_game import SnakeGame
 from src.utils import pgutils, debug
@@ -20,11 +19,12 @@ class Engine:
 
     def user_play_one_game(self):
         game_over = False
-        self.env.reset(n_foods=self.args.num_init_foods, snake_length=self.args.snake_init_length)
+        self.env.reset(num_foods=self.args.num_init_foods, snake_length=self.args.snake_init_length)
         self.env.display()
         while not game_over:
             game_over = self.user_play_one_step()
             self.env.display()
+            print(f'Score: {self.env.scores}, Game Over: {game_over}, Empty: {self.env.board.get_empty_blocks()}')
 
     def user_play_one_step(self):
         action = pgutils.get_user_action()
@@ -64,30 +64,17 @@ if __name__ == '__main__':
     parser.add_argument('--snake_body_color', nargs='+', default=GREEN, type=int)
     parser.add_argument('--snake_head_value', default=3, type=int)
     parser.add_argument('--snake_head_color', nargs='+', default=DARK_GREEN, type=int)
-    parser.add_argument('--snake_init_length', default=5, type=int)
+    parser.add_argument('--snake_init_length', default=3, type=int)
 
     # Food Configs
     parser.add_argument('--food_value', default=4, type=int)
     parser.add_argument('--food_color', nargs='+', default=RED, type=int)
-    parser.add_argument('--num_init_foods', default=5, type=int)
+    parser.add_argument('--num_init_foods', default=1, type=int)
 
     args = parser.parse_args()
 
-    # Get monitor size [height, width]
-    root = tk.Tk()
-    args.monitor_size =[root.winfo_screenheight(), root.winfo_screenwidth()]
-
     # Check environment inputs
-    debug.check_env_inputs(args=args)
-
-    # Enabling pygame if player is user
-    if args.player == 'user':
-        args.use_pygame = True
-
-    args.pygame_display_size = [
-        args.pygame_cell_size[0] * args.board_size[0],
-        args.pygame_cell_size[1] * args.board_size[1]
-    ]
+    args = debug.check_env_inputs(args=args)
 
     print(args)
 
