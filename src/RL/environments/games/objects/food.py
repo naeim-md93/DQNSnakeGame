@@ -17,7 +17,6 @@ class Food:
 
         return coords
 
-
     def get_one_food(self, board_size, invalid_coords):
         h = np.random.randint(low=0, high=board_size[0])
         w = np.random.randint(low=0, high=board_size[1])
@@ -28,7 +27,6 @@ class Food:
             coord = self.get_one_food(board_size=board_size, invalid_coords=invalid_coords)
 
         return coord
-
 
     def draw(self, display_surface, cell_size):
         for coord in self.coords:

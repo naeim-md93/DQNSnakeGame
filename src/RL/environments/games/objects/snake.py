@@ -6,40 +6,49 @@ class Snake:
     def __init__(
             self,
             board_size,
+            board_directions,
+            length,
+            actions,
             body_value,
             body_color,
             head_value,
             head_color,
-            length,
             invalid_coords,
     ):
-        self.direction = np.random.randint(low=0, high=4)
+
+        self.actions = actions
+        self.direction = None
         self.body_value = body_value
         self.body_color = body_color
         self.head_value = head_value
         self.head_color = head_color
-        self.board_tail_adds = [
-            (0, 1),  # direction Left -> add to right
-            (1, 0),  # direction up -> add to down
-            (-1, 0),  # direction down -> add to up
-            (0, -1),  # direction right -> add to left
-        ]
-
-        self.coords = self.get_coords(board_size=board_size, invalid_coords=invalid_coords, length=length, )
-
-    def get_coords(self, board_size, invalid_coords, length):
-        coords = []
-
-        coords.append(self.get_head_coords(board_size=board_size, invalid_coords=invalid_coords))
-
-        for _ in range(1, length):
-            coord = self.get_next_body_coord(prev_coord=coords[-1], invalid_coords=invalid_coords + coords)
-            coords.append(coord)
-
-        return coords
+        self.coords = self.get_coords(
+            board_size=board_size,
+            invalid_coords=invalid_coords,
+            length=length,
+            board_directions=board_directions
+        )
 
     def get_length(self):
         return len(self.coords)
+
+    def get_coords(self, board_size, invalid_coords, length, board_directions):
+        coords = []
+
+        # Add head coords
+        coords.append(self.get_head_coords(board_size=board_size, invalid_coords=invalid_coords))
+
+        # Add body coords
+        for s in range(1, length):
+            coord = self.get_next_body_coord(
+                board_directions=board_directions,
+                prev_coord=coords[-1],
+                invalid_coords=invalid_coords + coords,
+                segment=s
+            )
+            coords.append(coord)
+
+        return coords
 
     def get_head_coords(self, board_size, invalid_coords):
 
@@ -53,20 +62,36 @@ class Snake:
 
         return head_coords
 
-    def get_next_body_coord(self, prev_coord, invalid_coords):
+    def get_next_body_coord(self, board_directions, prev_coord, invalid_coords, segment):
+
+        # Empty list of next possible coords
         next_coords = []
 
-        for i, c in enumerate(self.board_tail_adds):
-            next_coords.append((prev_coord[0] + c[0], prev_coord[1] + c[1]))
+        # Add all 4 next possible coords to list
+        for n, c in board_directions.items():
+            next_coords.append(
+                (
+                    (prev_coord[0] + c['ADD_TO_COORDS'][0], prev_coord[1] + c['ADD_TO_COORDS'][1]),
+                    c['INVALID']
+                )
+            )
 
-        next_coords = [c for c in next_coords if c not in invalid_coords]
+        # Remove coords that are invalid
+        next_coords = [c for c in next_coords if c[0] not in invalid_coords]
 
-        coord = next_coords[np.random.randint(low=0, high=len(next_coords))]
+        # Select next coord randomly from next valid coords list
+        nxc = next_coords[np.random.randint(low=0, high=len(next_coords))]
+
+        if segment == 1:
+            coord, self.direction = nxc
+        else:
+            coord = nxc[0]
 
         return coord
 
     def draw(self, display_surface, cell_size):
         for i, coord in enumerate(self.coords):
+
             l = coord[0] * cell_size[1]
             t = coord[1] * cell_size[0]
 
