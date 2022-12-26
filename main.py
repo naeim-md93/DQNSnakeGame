@@ -21,19 +21,24 @@ if __name__ == '__main__':
     # Pygame Configs
     parser.add_argument('--use_pygame', default=False, action='store_true')
     parser.add_argument('--pygame_game_name', default='DQN Snake Game', type=str)
-
-    
-    parser.add_argument('--background_color', nargs='+', default=CONSTANTS.BACKGROUND_COLOR, type=int)
-    parser.add_argument('--grid_color', nargs='+', default=CONSTANTS.GRID_COLOR, type=int)
+    parser.add_argument('--max_obstacles', default=0, type=int)
     
     # Store inputs as module
     args = parser.parse_args()
     
+    # Adding additional settings
+    args.env_objects_values = CONSTANTS.ENV_OBJECTS_VALUES
+    args.env_objects_colors = CONSTANTS.ENV_OBJECTS_COLORS
+    args.snake_actions = CONSTANTS.SNAKE_ACTIONS
+    args.board_directions = CONSTANTS.BOARD_DIRECTIONS
+    
     # Check inputs
     args = debug.process_inputs(args=args)
     
-    print(args)
+    # print(args)
     env = SnakeGame(args=args)
-    
-    time.sleep(10)
+    print(env.board.get_occupied_coords())
+    print(env.board.get_empty_coords())
+    print(env.board)
+    time.sleep(60)
     pygame.quit()
