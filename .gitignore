@@ -134,3 +134,4 @@ dmypy.json
 # Custom
 temp/
 old/
+new_old/
