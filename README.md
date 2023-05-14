@@ -1,5 +1,6 @@
 # TODO:
 1. Update Readme.md and Wiki
+2. Push new updates from local
 
 # DQNSnakeGame
 Snake Game using DQN
