@@ -1,3 +1,6 @@
+# TODO:
+1. Update Readme.md and Wiki
+
 # DQNSnakeGame
 Snake Game using DQN
 
