@@ -1,67 +1,104 @@
-import os
 import tkinter
 
 
-def check_inputs(args):
+def check_int_value(x: int, minimum: int = None, maximum: int = None, name: str = 'input') -> None:
+    """
+    Check int value
+    :param x: value
+    :param minimum: minimum value
+    :param maximum: maximum value
+    :param name: name of the variable
+    :return: None
+    """
+    if not isinstance(x, int):
+        raise ValueError(f'{name} should be of type int, but got {type(x)}')
 
-    color_mins = [0, 0, 0]
-    color_maxs = [255, 255, 255]
-
-    check_path(x=args.root_path, parent='root_path')
-    check_list_elements(x=args.pygame_cell_size, num_elements=2, parent='pygame_cell_size', mins=[1, 1])
-    check_list_elements(x=args.board_size, num_elements=2, parent='board_size', mins=[4, 4])
-    check_list_elements(x=args.background_color, num_elements=3, parent='background_color', mins=color_mins, maxs=color_maxs)
-    check_list_elements(x=args.grid_color, num_elements=3, parent='grid_color', mins=color_mins, maxs=color_maxs)
-    check_list_elements(x=args.border_color, num_elements=3, parent='border_color', mins=color_mins, maxs=color_maxs)
-    check_list_elements(x=args.snake_body_color, num_elements=3, parent='snake_body_color', mins=color_mins, maxs=color_maxs)
-    check_list_elements(x=args.snake_head_color, num_elements=3, parent='snake_head_color', mins=color_mins, maxs=color_maxs)
-    check_list_elements(x=args.food_color, num_elements=3, parent='food_color', mins=color_mins, maxs=color_maxs)
-    check_int_value(x=args.snake_init_length, parent='snake_init_length', minimum=1, maximum=20)  # TODO: Increase Maximum
-    check_int_value(x=args.num_init_foods, parent='num_init_foods', minimum=1, maximum=100)  # TODO: Increase Maximum
-    args.pygame_cell_size, args.pygame_display_size = check_display_size(board_size=args.board_size, pygame_cell_size=args.pygame_cell_size)
-
-    return args
-
-
-def check_path(x, parent='input'):
-    if not os.path.exists(path=x):
-        raise ValueError(f'{parent} not exists at {x}')
-
-
-def check_int_value(x, minimum=None, maximum=None, parent='input'):
     if (minimum is not None) and (x < minimum):
-        raise ValueError(f'{parent} value should be at least {minimum}, but got {x}')
+        raise ValueError(f'{name} value should be at least {minimum}, but got {x}')
 
     if (maximum is not None) and (x > maximum):
-        raise ValueError(f'{parent} value should be at most {maximum}, but got {x}')
+        raise ValueError(f'{name} value should be at most {maximum}, but got {x}')
 
 
-def check_list_elements(x, num_elements, parent='input', mins=None, maxs=None):
+def check_float_value(x: int, minimum: int = None, maximum: int = None, name: str = 'input') -> None:
+    """
+    Check int value
+    :param x: value
+    :param minimum: minimum value
+    :param maximum: maximum value
+    :param name: name of the variable
+    :return: None
+    """
+    if not isinstance(x, float):
+        raise ValueError(f'{name} should be of type int, but got {type(x)}')
+
+    if (minimum is not None) and (x < minimum):
+        raise ValueError(f'{name} value should be at least {minimum}, but got {x}')
+
+    if (maximum is not None) and (x > maximum):
+        raise ValueError(f'{name} value should be at most {maximum}, but got {x}')
+
+
+def check_list_of_ints(
+        x: list[int],
+        num_elements: int,
+        name: str = 'input',
+        mins: list[int] = None,
+        maxs: list[int] = None
+) -> None:
+    """
+    Checking a list of elements
+    First check if number of elements in list is equal to num_elements
+    then check each element using check_int_value function
+    :param x: list of ints
+    :param num_elements: number of elements in x
+    :param name: name of the variable containing x
+    :param mins: minimum value for each element in x
+    :param maxs: maximum value for each element in x
+    :return:
+    """
+    if not isinstance(x, list):
+        raise ValueError(f'{name} should be of type list, but got {type(x)}')
+
     if len(x) != num_elements:
-        raise ValueError(f'{parent} should have {num_elements} elements, but got {len(x)}')
+        raise ValueError(f'{name} should have {num_elements} elements, but got {len(x)}')
 
     for i, c in enumerate(x):
         if mins is not None:
-            check_int_value(x=c, minimum=mins[i], maximum=None, parent=parent)
+            check_int_value(x=c, minimum=mins[i], maximum=None, name=name)
 
         if maxs is not None:
-            check_int_value(x=c, minimum=None, maximum=maxs[i], parent=parent)
+            check_int_value(x=c, minimum=None, maximum=maxs[i], name=name)
 
 
-def check_display_size(board_size, pygame_cell_size):
+def check_display_size(board_size: list[int], cell_size: int) -> tuple[int, list[int, int]]:
+    """
+    Check if board_size with cell_size can be displayed on user monitor
+    :param board_size: Size of the board game
+    :param cell_size: size of each cell in board game
+    :return: adjusted cell_size and display size
+    """
+
     # Get monitor size [height, width]
     tk = tkinter.Tk()
-    monitor_size = [tk.winfo_screenheight(), tk.winfo_screenwidth()]
+    # Get minimum display size;
+    # -200 for taskbar (in bottom) and notification bar (in top)
+    min_disp_size = min([tk.winfo_screenheight(), tk.winfo_screenwidth()]) - 200
 
-    minimum_sizes = []
+    # For each height and width in board size
     for i in range(len(board_size)):
-        temp = int(monitor_size[i] // (board_size[i] * 3.5/3))
-        if temp < pygame_cell_size[i]:
-            minimum_sizes.append(temp)
-        else:
-            minimum_sizes.append(pygame_cell_size[i])
 
-    pygame_cell_size = [min(minimum_sizes), min(minimum_sizes)]
-    pygame_display_size = [board_size[0] * pygame_cell_size[0], board_size[1] * pygame_cell_size[1]]
+        # Reduce cell size until board size with cell size fits in display size
+        while ((board_size[i] * cell_size) + board_size[i] + 1) > min_disp_size:
+            cell_size = cell_size - 1
 
-    return pygame_cell_size, pygame_display_size
+    # (board_size[i] + 1 for lines between each cell
+    display_size = [
+        board_size[0] * cell_size + board_size[0] + 1,
+        board_size[1] * cell_size + board_size[1] + 1
+    ]
+
+    if min(display_size) < 1:
+        raise ValueError(f"Can't start pygame with board_size {board_size} and cell size {cell_size}")
+
+    return cell_size, display_size

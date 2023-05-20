@@ -132,5 +132,6 @@ dmypy.json
 .idea/
 
 # Custom
-temp/
-old/
+checkpoints/
+logs/
+env.py
