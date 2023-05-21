@@ -14,10 +14,10 @@ if __name__ == '__main__':
 
     # General settings
     parser.add_argument('--session', default='MMD0', type=str)
-    parser.add_argument('--seed', default=42, type=int)
+    parser.add_argument('--seed', default=S.SEED, type=int)
     parser.add_argument('--root_path', default=os.getcwd(), type=str)
     parser.add_argument('--total_games', default=S.TOTAL_GAMES, type=int)
-    parser.add_argument('--use_pygame', default=S.USE_PYGAME, action='store_true')
+    parser.add_argument('--pygame', default=S.PYGAME, action='store_true')
     parser.add_argument('--debug', default=S.DEBUG, action='store_true')
 
     # Environment settings
@@ -28,6 +28,7 @@ if __name__ == '__main__':
     # Board settings
     parser.add_argument('--background_color', nargs='+', default=S.BACKGROUND_COLOR, type=int)
     parser.add_argument('--background_value', default=S.BACKGROUND_VALUE, type=int)
+    parser.add_argument('--grid_color', nargs='+', default=S.GRID_COLOR, type=int)
     parser.add_argument('--left_index', default=S.LEFT, type=int)
     parser.add_argument('--up_index', default=S.UP, type=int)
     parser.add_argument('--right_index', default=S.RIGHT, type=int)
@@ -97,30 +98,27 @@ if __name__ == '__main__':
     args.cell_size, args.display_size = debug.check_display_size(board_size=args.board_size, cell_size=args.cell_size)
 
     # Board settings
-    debug.check_list_of_ints(x=args.background_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255],
-                             name='background_color')
+    debug.check_list_of_ints(x=args.background_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255], name='background_color')
     debug.check_int_value(x=args.background_value, minimum=0, maximum=4, name='background_value')
+    debug.check_list_of_ints(x=args.grid_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255], name='grid_color')
     debug.check_int_value(x=args.left_index, minimum=0, maximum=3, name='left_index')
     debug.check_int_value(x=args.up_index, minimum=0, maximum=3, name='up_index')
     debug.check_int_value(x=args.right_index, minimum=0, maximum=3, name='right_index')
     debug.check_int_value(x=args.down_index, minimum=0, maximum=3, name='down_index')
 
     # Border settings
-    debug.check_list_of_ints(x=args.border_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255],
-                             name='border_color')
+    debug.check_list_of_ints(x=args.border_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255], name='border_color')
     debug.check_int_value(x=args.border_value, minimum=0, maximum=4, name='border_value')
 
     # Snake settings
-    debug.check_list_of_ints(x=args.snake_head_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255],
-                             name='snake_head_color')
+    debug.check_list_of_ints(x=args.snake_head_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255], name='snake_head_color')
     debug.check_int_value(x=args.snake_head_value, minimum=0, maximum=4, name='snake_head_value')
-    debug.check_list_of_ints(x=args.snake_body_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255],
-                             name='snake_body_color')
+    debug.check_list_of_ints(x=args.snake_body_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255], name='snake_body_color')
     debug.check_int_value(x=args.snake_body_value, minimum=0, maximum=4, name='snake_body_value')
     debug.check_int_value(x=args.min_snake_length, minimum=1, name='min_snake_length')
 
     # TODO: increase initial snake length to maximum possible
-    debug.check_int_value(x=args.init_snake_length, minimum=args.min_snake_length, maximum=4, name='init_snake_length')
+    debug.check_int_value(x=args.init_snake_length, minimum=args.min_snake_length, maximum=10, name='init_snake_length')
     debug.check_int_value(x=args.snake_reduction_rate, minimum=0, name='snake_reduction_rate')
 
     # Food settings
@@ -155,6 +153,7 @@ if __name__ == '__main__':
     debug.check_float_value(x=args.long_memory_gamma, minimum=0, maximum=1, name='long_memory_gamma')
     debug.check_int_value(x=args.batch_size, minimum=1, name='batch_size')
 
+    # Others
     assert len({
         args.left_index,
         args.up_index,
@@ -182,8 +181,9 @@ if __name__ == '__main__':
 
     tmp = {
         # General settings
+        'SEED': args.seed,
         'TOTAL_GAMES': args.total_games,
-        'USE_PYGAME': args.use_pygame,
+        'PYGAME': args.pygame,
         'DEBUG': args.debug,
 
         # Environment settings

@@ -12,19 +12,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DQN Snake Game')
 
     # General settings
-    parser.add_argument('--seed', default=42, type=int)
-    parser.add_argument('--total_games', default=1, type=int)
+    parser.add_argument('--seed', default=S.SEED, type=int)
+    parser.add_argument('--total_games', default=S.TOTAL_GAMES, type=int)
+    parser.add_argument('--debug', default=S.DEBUG, action='store_true')
 
     # Environment settings
     parser.add_argument('--game_name', default='DQN Snake Game', type=str)
-    parser.add_argument('--cell_size', default=S.CELL_SIZE, type=int)
     parser.add_argument('--board_size', nargs='+', default=S.BOARD_SIZE, type=int)
+    parser.add_argument('--cell_size', default=S.CELL_SIZE, type=int)
 
     # Board settings
     parser.add_argument('--background_color', nargs='+', default=S.BACKGROUND_COLOR, type=int)
     parser.add_argument('--background_value', default=S.BACKGROUND_VALUE, type=int)
     parser.add_argument('--grid_color', nargs='+', default=S.GRID_COLOR, type=int)
-
     parser.add_argument('--left_index', default=S.LEFT, type=int)
     parser.add_argument('--up_index', default=S.UP, type=int)
     parser.add_argument('--right_index', default=S.RIGHT, type=int)
@@ -72,16 +72,6 @@ if __name__ == '__main__':
     debug.check_int_value(x=args.up_index, minimum=0, maximum=3, name='up_index')
     debug.check_int_value(x=args.right_index, minimum=0, maximum=3, name='right_index')
     debug.check_int_value(x=args.down_index, minimum=0, maximum=3, name='down_index')
-    assert len({
-        args.left_index,
-        args.up_index,
-        args.right_index,
-        args.down_index
-    }) == 4, f'direction indices should be unique, but got ' \
-             f'{args.left_index}, ' \
-             f'{args.up_index}, ' \
-             f'{args.right_index}, ' \
-             f'{args.down_index}'
 
     # Border settings
     debug.check_list_of_ints(x=args.border_color, num_elements=3, mins=[0, 0, 0], maxs=[255, 255, 255], name='border_color')
@@ -94,7 +84,7 @@ if __name__ == '__main__':
     debug.check_int_value(x=args.snake_body_value, minimum=0, maximum=4, name='snake_body_value')
     debug.check_int_value(x=args.min_snake_length, minimum=1, name='min_snake_length')
     # TODO: increase initial snake length to maximum possible
-    debug.check_int_value(x=args.init_snake_length, minimum=args.min_snake_length, maximum=4, name='init_snake_length')
+    debug.check_int_value(x=args.init_snake_length, minimum=args.min_snake_length, maximum=10, name='init_snake_length')
     debug.check_int_value(x=args.snake_reduction_rate, minimum=0, name='snake_reduction_rate')
 
     # Food settings
@@ -103,6 +93,18 @@ if __name__ == '__main__':
     debug.check_int_value(x=args.min_num_foods, minimum=1, name='min_num_foods')
     debug.check_int_value(x=args.init_num_foods, minimum=args.min_num_foods, name='init_num_foods')
     debug.check_int_value(x=args.food_reduction_rate, minimum=0, name='food_reduction_rate')
+
+    # Others
+    assert len({
+        args.left_index,
+        args.up_index,
+        args.right_index,
+        args.down_index
+    }) == 4, f'direction indices should be unique, but got ' \
+             f'{args.left_index}, ' \
+             f'{args.up_index}, ' \
+             f'{args.right_index}, ' \
+             f'{args.down_index}'
 
     assert len({
         args.background_value,
@@ -118,12 +120,18 @@ if __name__ == '__main__':
         f'{args.food_value}'
     ###############################################################################################
 
-    # Update reinforcement library settings
     tmp = {
-        'CELL_SIZE': args.cell_size,
-        'BOARD_SIZE': args.board_size,
-        'DISPLAY_SIZE': args.display_size,
+        # General settings
+        'SEED': args.seed,
+        'TOTAL_GAMES': args.total_games,
         'DEBUG': S.DEBUG,
+
+        # Environment settings
+        'BOARD_SIZE': args.board_size,
+        'CELL_SIZE': args.cell_size,
+        'DISPLAY_SIZE': args.display_size,
+
+        # Board settings
         'BACKGROUND_COLOR': args.background_color,
         'BACKGROUND_VALUE': args.background_value,
         'GRID_COLOR': args.grid_color,
@@ -137,19 +145,25 @@ if __name__ == '__main__':
             args.right_index: {'ADD_TO_COORDS': (0, 1), 'INVALID': args.left_index},   # (+h, +w, index)
             args.down_index: {'ADD_TO_COORDS': (1, 0), 'INVALID': args.up_index}    # (+h, +w, index)
         },
+
+        # Border settings
         'BORDER_VALUE': args.border_value,
         'BORDER_COLOR': args.border_color,
+
+        # Snake settings
         'SNAKE_BODY_VALUE': args.snake_body_value,
         'SNAKE_BODY_COLOR': args.snake_body_color,
         'SNAKE_HEAD_VALUE': args.snake_head_value,
         'SNAKE_HEAD_COLOR': args.snake_head_color,
+        'MIN_SNAKE_LENGTH': args.min_snake_length,
         'SNAKE_ACTIONS': {
             'LEFT': args.left_index,
             'UP': args.up_index,
             'RIGHT': args.right_index,
             'DOWN': args.down_index
         },
-        'MIN_SNAKE_LENGTH': args.min_snake_length,
+
+        # Food settings
         'FOOD_VALUE': args.food_value,
         'FOOD_COLOR': args.food_color,
         'MIN_NUM_FOODS': args.min_num_foods,
