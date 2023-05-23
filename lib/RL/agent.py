@@ -2,7 +2,7 @@ import math
 import torch
 import random
 import numpy as np
-import torch.nn.functional as F
+from collections import deque
 
 from .agent_objects.model import QModel
 from .agent_objects.memory_pool import MemoryPool
@@ -24,7 +24,7 @@ class QAgent:
         )
         self.model = QModel(num_classes=len(env.SNAKE_ACTIONS), save_path=checkpoints_path).to(device=device)
 
-        self.optimizer = torch.optim.SGD(params=self.model.parameters(), lr=env.LEARNING_RATE)
+        self.optimizer = torch.optim.Adam(params=self.model.parameters(), lr=env.LEARNING_RATE)
         self.criterion = torch.nn.MSELoss(reduction='none')
 
     def one_hot_state(self, state):
@@ -37,14 +37,20 @@ class QAgent:
         ), axis=1)
         return state
 
-    def get_agent_action(self, state: np.ndarray, legal_moves: np.ndarray, epsilon: float) -> np.ndarray:
+    def get_agent_action(
+            self,
+            state2ds: deque[np.ndarray],
+            state1ds: deque[np.ndarray],
+            legal_moves: np.ndarray,
+            epsilon: float
+    ) -> tuple[np.ndarray, float]:
 
         if env.DEBUG:
             print(f'{"#" * 10} GET AGENT ACTION {"#" * 10}')
             print(f'{epsilon=}')
-            print(f'state: {state.shape}')
-            print(f'{np.array2string(state)}')
-            print(f'legal_moves: {legal_moves.shape} {legal_moves=}')
+            print(f'state2ds: {len(state2ds)} * {state2ds[0].shape}')
+            print(f'state1ds: {len(state1ds)} * {state1ds[0].shape}')
+            print(f'legal_moves: {legal_moves=}')
 
         pred = None
         random_value = np.random.random()
@@ -57,27 +63,33 @@ class QAgent:
 
         # Model action
         else:
-            # (1, 14, 14) -> (1, 5, 14, 14)
-            state = self.one_hot_state(state=np.expand_dims(a=state, axis=0))
-            state = torch.tensor(data=state, dtype=torch.float)
-            state = state.to(device=self.device)
+            state2ds = [np.expand_dims(a=s, axis=0) for s in state2ds]  # [(1, 14, 14), ..]
+            state2ds = [self.one_hot_state(state=s) for s in state2ds]  # [(1, 5, 14, 14), ..]
+            state2ds = np.concatenate(state2ds, axis=0)  # (t, 5, 14, 14)
+            state2ds = torch.tensor(data=state2ds, dtype=torch.float).unsqueeze(0)  # (b, t, 5, 14, 14)
+            state2ds = state2ds.to(device=self.device)
+
+            state1ds = np.stack(arrays=state1ds, axis=0)  # (t, 12)
+            state1ds = torch.tensor(data=state1ds, dtype=torch.float).unsqueeze(0)  # (b, t, 12)
+            state1ds = state1ds.to(device=self.device)
 
             self.model.eval()
 
             with torch.no_grad():
-                pred = self.model(state).squeeze(0).detach().cpu().numpy()
+                pred = self.model(state2ds, state1ds).squeeze(0).detach().cpu().numpy()
 
             pred = np.where(legal_moves == 1, pred, -np.inf)
             action[np.argmax(a=pred, axis=0)] = 1
 
         if env.DEBUG:
-            print(f'state: {state.shape}')
+            print(f'state2ds: {len(state2ds)} * {state2ds[0].shape}')
+            print(f'state1ds: {len(state1ds)} * {state1ds[0].shape}')
             print(f'{random_value=}')
             print(f'{pred=}')
             print(f'action: {action.shape} {action=}')
             input(f'{"#" * 10} GET AGENT ACTION {"#" * 10}')
 
-        return action
+        return action, random_value
 
     def remember(self, xp: tuple, reward: float) -> list[int, int, int, int]:
 
@@ -114,18 +126,20 @@ class QAgent:
 
         self.model.train()
 
-        state0s = torch.tensor(data=xps[0], dtype=torch.float).to(device=self.device)
-        legal_moves0 = xps[1]
-        actions = xps[2]
-        rewards = xps[3]
-        game_overs = xps[4]
-        state1s = torch.tensor(data=xps[5], dtype=torch.float).to(self.device)
-        legal_moves1 = xps[6]
+        state2d0s = torch.tensor(data=xps[0], dtype=torch.float).to(device=self.device)
+        state1d0s = torch.tensor(data=xps[1], dtype=torch.float).to(device=self.device)
+        legal_moves0 = xps[2]
+        actions = xps[3]
+        rewards = xps[4]
+        game_overs = xps[5]
+        state2d1s = torch.tensor(data=xps[6], dtype=torch.float).to(device=self.device)
+        state1d1s = torch.tensor(data=xps[7], dtype=torch.float).to(device=self.device)
+        legal_moves1 = xps[8]
 
-        state1s_pred = self.model(state1s).detach().cpu().numpy()
+        state1s_pred = self.model(state2d1s, state1d1s).detach().cpu().numpy()
         state1s_pred = np.where(legal_moves1 == 1, state1s_pred, -np.inf)
 
-        state0s_pred = self.model(state0s)
+        state0s_pred = self.model(state2d0s, state1d0s)
 
         target = state0s_pred.clone().detach().cpu().numpy()
         target_non_action = target * (1 - actions)
@@ -142,12 +156,14 @@ class QAgent:
         self.optimizer.step()
 
         if env.DEBUG:
-            print(f'state0: {state0s.shape}')
+            print(f'state2d0s: {state2d0s.shape}')
+            print(f'state1d0s: {state1d0s.shape}')
             print(f'legal_moves0: {legal_moves0.shape}')
             print(f'actions: {actions.shape}')
             print(f'rewards: {rewards.shape}')
             print(f'game_overs: {game_overs.shape}')
-            print(f'state1s: {state1s.shape}')
+            print(f'state2d1s: {state2d1s.shape}')
+            print(f'state1d1s: {state1d1s.shape}')
             print(f'legal_moves1: {legal_moves1.shape}')
             print(f'{state0s_pred=}')
             print(f'{state1s_pred=}')
@@ -163,16 +179,36 @@ class QAgent:
         if env.DEBUG:
             print(f'{"#" * 10} TRAIN SHORT MEMORY {"#" * 10}')
             print(f'{env.SHORT_MEMORY_GAMMA=}')
+            for i in range(len(xp)):
+                print(xp[i].shape)
+
+        state2d0 = xp[0]  # (t, 14, 14)
+        state2d0 = [np.expand_dims(a=state2d0[t], axis=0) for t in range(state2d0.shape[0])]  # [(1, 14, 14), ...]
+        state2d0 = [self.one_hot_state(state=x) for x in state2d0]  # [(1, 5, 14, 14), ...]
+        state2d0 = np.concatenate(state2d0, axis=0)  # (t, 5, 14, 14)
+        state2d0 = np.expand_dims(a=state2d0, axis=0)  # (1, t, 5, 14, 14)
+
+        state2d1 = xp[6]  # (t + 1, 14, 14)
+        state2d1 = [np.expand_dims(a=state2d1[t], axis=0) for t in range(state2d1.shape[0])]  # [(1, 14, 14), ...]
+        state2d1 = [self.one_hot_state(state=x) for x in state2d1]  # [(1, 5, 14, 14), ...]
+        state2d1 = np.concatenate(state2d1, axis=0)  # (t + 1, 5, 14, 14)
+        state2d1 = np.expand_dims(a=state2d1, axis=0)  # (1, t, 5, 14, 14)
 
         xp = (
-            self.one_hot_state(state=xp[0]),  # State0
-            xp[1],  # Legal Moves 0
-            xp[2],  # Action
-            xp[3],  # Reward
-            xp[4],  # Game Over
-            self.one_hot_state(state=xp[5]),  # State1
-            xp[6],  # Legal Moves 1
+            state2d0,  # State2d0 (1, t, 5, 14, 14)
+            np.expand_dims(a=xp[1], axis=0),  # (b, t, 12)
+            xp[2],  # Legal Moves 0 (1, 4)
+            xp[3],  # Action (1, 4)
+            xp[4],  # Reward (1, 1)
+            xp[5],  # Game Over (1, 1)
+            state2d1,  # State1 (1, t + 1, 14, 14)
+            np.expand_dims(a=xp[7], axis=0),  # (b, t + 1, 12)
+            xp[8],  # Legal Moves 1 (1, 4)
         )
+
+        if env.DEBUG:
+            for i in range(len(xp)):
+                print(xp[i].shape)
 
         losses = self.train_model(xps=xp, gamma=env.SHORT_MEMORY_GAMMA)
 
@@ -183,12 +219,20 @@ class QAgent:
 
     def train_long_memory(self, eta):
 
-        loss = [0, 0, 0, 0]
+        loss = (0, 0, 0, 0)
 
         if len(self.memory_pool.NMP1) and len(self.memory_pool.NMP2) and len(self.memory_pool.PMP2) and len(self.memory_pool.PMP1):
 
-            MP1_samples = min([math.ceil((eta * env.BATCH_SIZE) / 2), len(self.memory_pool.PMP1), len(self.memory_pool.NMP1)])
-            MP2_samples = min([math.floor(((1 - eta) * env.BATCH_SIZE) / 2), len(self.memory_pool.PMP2), len(self.memory_pool.NMP2)])
+            MP1_samples = min(
+                math.ceil((eta * env.BATCH_SIZE) / 2),
+                 len(self.memory_pool.PMP1),
+                 len(self.memory_pool.NMP1)
+            )
+            MP2_samples = min(
+                math.floor(((1 - eta) * env.BATCH_SIZE) / 2),
+                 len(self.memory_pool.PMP2),
+                 len(self.memory_pool.NMP2)
+            )
 
             if len(self.memory_pool.NMP1) > MP1_samples:
                 miniNMP1 = random.sample(population=self.memory_pool.NMP1, k=MP1_samples)
@@ -213,15 +257,28 @@ class QAgent:
             mini_sample = list(miniNMP1) + list(miniNMP2) + list(miniPMP2) + list(miniPMP1)
             random.shuffle(x=mini_sample)
 
-            state0s = self.one_hot_state(state=np.concatenate([m[0] for m in mini_sample], axis=0))
-            legal_moves0 = np.concatenate([m[1] for m in mini_sample], axis=0)
-            actions = np.concatenate([m[2] for m in mini_sample], axis=0)
-            rewards = np.concatenate([m[3] for m in mini_sample], axis=0)
-            game_overs = np.concatenate([m[4] for m in mini_sample], axis=0)
-            state1s = self.one_hot_state(state=np.concatenate([m[5] for m in mini_sample], axis=0))
-            legal_moves1 = np.concatenate([m[6] for m in mini_sample], axis=0)
+            state2d0 = [m[0] for m in mini_sample]  # [(t, 14, 14), ...]
+            state2d0 = [np.expand_dims(a=x, axis=1) for x in state2d0]  # [(t, 1, 14, 14), ...]
+            state2d0 = [np.concatenate([self.one_hot_state(state=s[t]) for t in s.shape[0]], axis=0) for s in state2d0]  # [(t, 5, 14, 14), ...]
+            state2d0 = np.stack(arrays=state2d0, axis=0)  # (b, t, 5, 14, 14)
 
-            xps = (state0s, legal_moves0, actions, rewards, game_overs, state1s, legal_moves1)
+            state1d0 = np.stack(arrays=[m[1] for m in mini_sample], axis=0)  # (b, t, 12)
+
+            legal_moves0 = np.concatenate([m[2] for m in mini_sample], axis=0)
+            actions = np.concatenate([m[3] for m in mini_sample], axis=0)
+            rewards = np.concatenate([m[4] for m in mini_sample], axis=0)
+            game_overs = np.concatenate([m[5] for m in mini_sample], axis=0)
+
+            state2d1 = [m[6] for m in mini_sample]  # [(t + 1, 14, 14), ...]
+            state2d1 = [np.expand_dims(a=x, axis=1) for x in state2d1]  # [(t + 1, 1, 14, 14), ...]
+            state2d1 = [np.concatenate([self.one_hot_state(state=s[t]) for t in s.shape[0]], axis=0) for s in state2d1]  # [(t + 1, 5, 14, 14), ...]
+            state2d1 = np.stack(arrays=state2d1, axis=0)  # (b, t + 1, 5, 14, 14)
+
+            state1d1 = np.stack(arrays=[m[7] for m in mini_sample], axis=0)  # (b, t + 1, 12)
+
+            legal_moves1 = np.concatenate([m[8] for m in mini_sample], axis=0)
+
+            xps = (state2d0, state1d0, legal_moves0, actions, rewards, game_overs, state2d1, state1d1, legal_moves1)
 
             if env.DEBUG:
                 print(f'{"#" * 10} TRAIN LONG TERM MEMORY {"#" * 10}')

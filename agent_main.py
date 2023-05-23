@@ -276,7 +276,6 @@ if __name__ == '__main__':
         init_num_foods=args.init_num_foods,
         food_reduction_rate=args.food_reduction_rate,
         logs_path=logs_path,
-        use_pygame=args.use_pygame,
         game_name=args.game_name
     )
     engine.play_by_agent(num_games=args.total_games)

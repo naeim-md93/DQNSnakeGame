@@ -1,6 +1,7 @@
 import pygame
 import numpy as np
 from tqdm import tqdm
+from collections import deque
 from torch.utils.tensorboard import SummaryWriter
 
 import env
@@ -18,26 +19,24 @@ class AgentEngine:
             init_num_foods: int,
             food_reduction_rate: int,
             logs_path: str,
-            use_pygame: bool,
             game_name: str
     ):
         self.environment = environment
         self.agent = agent
-        self.use_pygame = use_pygame
+        self.pygame = pygame
         self.init_snake_length = init_snake_length
         self.snake_reduction_rate = snake_reduction_rate
         self.init_num_foods = init_num_foods
         self.food_reduction_rate = food_reduction_rate
         self.logger = SummaryWriter(log_dir=logs_path)
 
-        if self.use_pygame:
+        if env.PYGAME:
             pygame.init()
             self.display_surface = pygame.display.set_mode(size=(env.DISPLAY_SIZE[1], env.DISPLAY_SIZE[0]))
             pygame.display.set_caption(game_name)
 
         if env.DEBUG:
             print(f'{"#" * 10} Initializing Agent Engine {"#" * 10}')
-            print(f'{self.use_pygame=}')
             print(f'{self.init_snake_length=}')
             print(f'{self.snake_reduction_rate=}')
             print(f'{self.init_num_foods=}')
@@ -101,6 +100,8 @@ class AgentEngine:
         short_memory_loss_down = [0]
         lm_losses = [0, 0, 0, 0]
         game_images = []
+        state2ds = deque(maxlen=10)
+        state1ds = deque(maxlen=10)
 
         if env.DEBUG:
             print(f'{"#" * 10} Play One GAME {"#" * 10}')
@@ -114,68 +115,78 @@ class AgentEngine:
         self.environment.reset(snake_length=snake_length, num_foods=num_foods)
 
         # Then get the initial environment info
-        state0, legal_moves0, img = self.environment.get_step_info()  # (14, 14), (4, )
-
-        # and add the first img to the game images list
+        state2d0, state1d0, legal_moves0, img = self.environment.get_step_info()  # (14, 14), (4, )
+        state2ds.append(state2d0)
+        state1ds.append(state1d0)
         game_images.append(img)
 
         # Display using pygame
-        if self.use_pygame:
+        if env.PYGAME:
             self.environment.display(display_surface=self.display_surface)
 
         if env.DEBUG:
             print(f'{"#" * 10} GET STATE 0 INFO {"#" * 10}')
-            print(f'state0: {state0.shape}')
-            print(f'{np.array2string(state0)}')
-            print(f'legal_moves0: {legal_moves0.shape} {legal_moves0=}')
+            print(f'State2d0:\n{np.array2string(state2d0)}')
+            print(f'State1d0:\n{state1d0}')
+            print(f'legal_moves0: {legal_moves0=}')
             input(f'{"#" * 10} GET STATE 0 INFO  {"#" * 10}')
 
         # Continue the game while it is not over
         while not game_over:
 
             # Get an action from agent
-            action = self.agent.get_agent_action(state=state0, legal_moves=legal_moves0, epsilon=epsilon)  # (4, )
+            action, random_value = self.agent.get_agent_action(
+                state2ds=state2ds,
+                state1ds=state1ds,
+                legal_moves=legal_moves0,
+                epsilon=epsilon
+            )
 
             # Play that action and get its game_over and reward state
             game_over, reward = self.environment.play_one_action(action=action)
             rewards_total.append(reward)
 
             # Then get the new environment info
-            state1, legal_moves1, img = self.environment.get_step_info()  # (14, 14), (4, )
+            state2d1, state1d1, legal_moves1, img = self.environment.get_step_info()  # (14, 14), (4, )
             game_images.append(img)
 
             # Display using pygame
-            if self.use_pygame:
+            if env.PYGAME:
                 self.environment.display(display_surface=self.display_surface)
 
             if env.DEBUG:
                 print(f'{"#" * 10} GET STATE 1 INFO {"#" * 10}')
-                print(f'state1: {state1.shape}')
-                print(f'{np.array2string(state1)}')
-                print(f'legal_moves1: {legal_moves1.shape} {legal_moves1=}')
+                print(f'State2d1:\n{np.array2string(state2d1)}')
+                print(f'State1d1:\n{state1d1}')
+                print(f'legal_moves1: {legal_moves1=}')
                 input(f'{"#" * 10} GET STATE 1 INFO  {"#" * 10}')
 
             xp = (
-                np.array([state0]),  # State0: (1, 14, 14)
+                np.stack(arrays=state2ds, axis=0),  # State0: (t, 14, 14)
+                np.stack(arrays=state1ds, axis=0),  # State0: (t, 12)
                 np.array([legal_moves0]),  # legal_moves0: (1, 4)
                 np.array([action]),  # action: (1, 4)
                 np.array([[reward]]),  # reward: (1, 1)
                 np.array([[game_over]]),  # game_over: (1, 1)
-                np.array([state1]),  # State1: (1, 14, 14)
+                np.stack(arrays=list(state2ds) + [state2d1], axis=0),  # State1: (t + 1, 14, 14)
+                np.stack(arrays=list(state1ds) + [state1d1], axis=0),  # State1: (t + 1, 12)
                 np.array([legal_moves1]),  # legal_moves0: (1, 4)
             )
 
             # Store this experience in memory pool
             sizes = self.agent.remember(xp, reward)
 
-            sm_losses = self.agent.train_short_memory(xp=xp)
-            short_memory_loss_left.append(sm_losses[env.LEFT])
-            short_memory_loss_up.append(sm_losses[env.UP])
-            short_memory_loss_right.append(sm_losses[env.RIGHT])
-            short_memory_loss_down.append(sm_losses[env.DOWN])
-            short_memory_loss_total.append(sm_losses.sum())
+            if random_value >= epsilon:
+                sm_losses = self.agent.train_short_memory(xp=xp)
+                short_memory_loss_left.append(sm_losses[env.LEFT])
+                short_memory_loss_up.append(sm_losses[env.UP])
+                short_memory_loss_right.append(sm_losses[env.RIGHT])
+                short_memory_loss_down.append(sm_losses[env.DOWN])
+                short_memory_loss_total.append(sm_losses.sum())
 
-            state0, legal_moves0 = state1, legal_moves1
+            state2ds.append(state2d1)
+            state1ds.append(state1d1)
+            legal_moves0 = legal_moves1
 
         if n > env.EXPLORE_GAMES:
             lm_losses = self.agent.train_long_memory(eta=eta)
@@ -202,4 +213,5 @@ class AgentEngine:
         self.logger.add_scalar(tag='LMLossDown', scalar_value=lm_losses[env.DOWN], global_step=n)
         self.logger.add_scalar(tag='LMLossTotal', scalar_value=np.sum(a=lm_losses), global_step=n)
 
-        self.agent.model.save()
+        if n % 1000 == 0:
+            self.agent.model.save()

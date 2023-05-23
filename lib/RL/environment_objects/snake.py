@@ -49,7 +49,6 @@ class Snake:
 
         # Add head coords
         coords.append(random.choice(seq=tuple(empty_coords)))
-
         # Add body coords
         for s in range(1, self.init_length):
             empty_coords.difference_update(set(coords))
@@ -92,7 +91,7 @@ class Snake:
             )
 
         # Remove coords that are invalid
-        next_coords.intersection(empty_coords)
+        next_coords = {x for x in next_coords if x[0] in empty_coords}
 
         # Select next coord randomly from next valid coords list
         nxc = random.choice(seq=tuple(next_coords))

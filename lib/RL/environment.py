@@ -59,21 +59,18 @@ class SnakeGame:
                 max_score=len(self.board.get_coords(rm_border_coords=True)) - self.board.snake.init_length
             )
 
-        elif self.steps == 300 * len(self.board.snake.coords):
+        elif self.steps == 100 * len(self.board.snake.coords):
             game_over = True
             reward += REWARDS['TIMEOUT']
 
         else:
             game_over = False
-            print(self.board)
             reward += REWARDS['ELSE'](
-                board_coords=self.board.border.coords,
                 snake_coords=self.board.snake.coords,
                 food_coords=self.board.food.coords,
                 choice=(h, w),
                 init_snake_length=self.board.snake.init_length
             )
-            print(reward)
             self.board.snake.coords.pop(-1)
             self.board.snake.coords.insert(0, (h, w))
 
@@ -99,12 +96,49 @@ class SnakeGame:
         Pillow image
         :return: Step info
         """
-        board = self.board.get_board()
+        state_2d = self.board.get_board()
+        snake_coords = tuple(self.board.snake.coords)
+        food_coords = tuple(self.board.food.coords)
+        border_coords = tuple(self.board.border.coords)
+        board_directions = self.board.directions
+        snake_direction = self.board.snake.direction
+
+        left = (
+            snake_coords[0][0] + board_directions[env.LEFT]['ADD_TO_COORDS'][0],
+            snake_coords[0][1] + board_directions[env.LEFT]['ADD_TO_COORDS'][1],
+        )
+        up = (
+            snake_coords[0][0] + board_directions[env.UP]['ADD_TO_COORDS'][0],
+            snake_coords[0][1] + board_directions[env.UP]['ADD_TO_COORDS'][1],
+        )
+        right = (
+            snake_coords[0][0] + board_directions[env.RIGHT]['ADD_TO_COORDS'][0],
+            snake_coords[0][1] + board_directions[env.RIGHT]['ADD_TO_COORDS'][1],
+        )
+        down = (
+            snake_coords[0][0] + board_directions[env.DOWN]['ADD_TO_COORDS'][0],
+            snake_coords[0][1] + board_directions[env.DOWN]['ADD_TO_COORDS'][1],
+        )
+
+        state_1d = np.array([
+            (left in border_coords) or (left in snake_coords[1:]),
+            (up in border_coords) or (up in snake_coords[1:]),
+            (right in border_coords) or (right in snake_coords[1:]),
+            (down in border_coords) or (down in snake_coords[1:]),
+            snake_direction == env.LEFT,
+            snake_direction == env.UP,
+            snake_direction == env.RIGHT,
+            snake_direction == env.DOWN,
+            snake_coords[0][1] > food_coords[0][1],
+            snake_coords[0][0] > food_coords[0][0],
+            snake_coords[0][1] < food_coords[0][1],
+            snake_coords[0][0] < food_coords[0][0],
+        ], dtype=int)
 
         legal_moves = np.ones(shape=(len(self.board.snake.actions),))
-        legal_moves[self.board.directions[self.board.snake.direction]['INVALID']] = 0
+        legal_moves[board_directions[snake_direction]['INVALID']] = 0
 
-        img = Image.fromarray(obj=board, mode='P')
+        img = Image.fromarray(obj=state_2d, mode='P')
         img.putpalette(
             data=self.board.color +
                  self.board.border.color +
@@ -114,7 +148,7 @@ class SnakeGame:
         )
         img = np.array(img.convert(mode='RGB'))
 
-        return board, legal_moves, img
+        return state_2d, state_1d, legal_moves, img
 
     def reset(self, num_foods: int, snake_length: int) -> None:
         """

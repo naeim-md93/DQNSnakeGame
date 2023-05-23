@@ -55,7 +55,6 @@ class UserEngine:
             while not game_over:
                 # Display the board
                 self.environment.display(display_surface=self.display_surface)
-                print(self.environment.board)
 
                 # Get user action
                 action = self.get_user_input(snake_direction=self.environment.board.snake.direction)

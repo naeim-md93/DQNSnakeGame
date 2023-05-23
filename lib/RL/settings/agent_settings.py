@@ -42,7 +42,7 @@ MIN_NUM_FOODS = 1
 #######################################
 
 # Exploration/Exploitation trade-off ##
-EXPLORE_GAMES = 2000
+EXPLORE_GAMES = 1000
 INIT_EPSILON = 0.5
 FINAL_EPSILON = 0.0
 #######################################
@@ -64,7 +64,7 @@ PMP1_PROPORTION = 0.125
 
 # Train settings ######################
 LEARNING_RATE = 0.0001
-SHORT_MEMORY_GAMMA = 0.1
+SHORT_MEMORY_GAMMA = 0.2
 LONG_MEMORY_GAMMA = 0.9
 BATCH_SIZE = 128
 #######################################

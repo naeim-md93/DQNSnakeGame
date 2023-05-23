@@ -1,15 +1,13 @@
 import os
-import matplotlib.pyplot as plt
 import torch
 from torch import nn
-import torch.nn.functional as F
 
 
 class LBRD(nn.Module):
-    def __init__(self, in_features, out_features, dropout):
+    def __init__(self, in_features: int, out_features: int, dropout: float = 0):
         super().__init__()
         self.fc = nn.Linear(in_features=in_features, out_features=out_features, bias=True)
-        # self.bn = nn.BatchNorm1d(num_features=out_features)
+        self.bn = nn.LayerNorm(normalized_shape=out_features)
         self.relu = nn.ReLU()
         self.drop = nn.Dropout(p=dropout)
 
@@ -20,7 +18,7 @@ class LBRD(nn.Module):
         x = self.fc(x)
 
         # (b, out_features) <- (b, in_features)
-        # x = self.bn(x)
+        x = self.bn(x)
 
         # (b, out_features) <- (b, out_features)
         x = self.relu(x)
@@ -34,7 +32,7 @@ class LBRD(nn.Module):
 
 
 class CBRD(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, dropout):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1, padding: int = 0, dropout: float = 0):
         super().__init__()
         self.conv = nn.Conv2d(
             in_channels=in_channels,
@@ -65,82 +63,55 @@ class CBRD(nn.Module):
 class QModel(nn.Module):
     def __init__(self, num_classes, save_path):
         super(QModel, self).__init__()
-        self.step = 0
         self.save_path = save_path
 
-        self.conv3x3_1 = CBRD(in_channels=5, out_channels=16, kernel_size=3, stride=1, padding=0, dropout=0)
-        self.conv3x3_2 = CBRD(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=0, dropout=0)
-        self.conv3x3_3 = CBRD(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=0, dropout=0)
+        self.conv1 = CBRD(in_channels=5, out_channels=32, kernel_size=5, dropout=0.3)
+        self.conv2 = CBRD(in_channels=32, out_channels=64, kernel_size=5, dropout=0.3)
+        self.conv3 = CBRD(in_channels=64, out_channels=128, kernel_size=5, dropout=0.3)
+        self.avgpool = nn.AdaptiveAvgPool2d(output_size=(1, 1))
+        self.conv_lstm = nn.LSTM(input_size=128, hidden_size=256, batch_first=False, bias=True)
 
-        self.conv5x5_1 = CBRD(in_channels=5, out_channels=28, kernel_size=5, stride=1, padding=1, dropout=0)
-        self.conv5x5_2 = CBRD(in_channels=28, out_channels=64, kernel_size=5, stride=1, padding=0, dropout=0)
+        self.fc1 = LBRD(in_features=12, out_features=32, dropout=0.3)
+        self.fc2 = LBRD(in_features=32, out_features=64, dropout=0.3)
+        self.fc3 = LBRD(in_features=64, out_features=128, dropout=0.3)
+        self.fc_lstm = nn.LSTM(input_size=128, hidden_size=256, batch_first=False, bias=True)
 
-        self.conv7x7_1 = CBRD(in_channels=5, out_channels=64, kernel_size=7, stride=1, padding=0, dropout=0)
+        self.pred1 = LBRD(in_features=512, out_features=64, dropout=0.3)
+        self.pred2 = nn.Linear(in_features=64, out_features=num_classes)
 
-        self.fc1 = LBRD(in_features=4096, out_features=2048, dropout=0.0)
-        self.fc2 = LBRD(in_features=2048, out_features=256, dropout=0.0)
-        self.fc3 = nn.Linear(in_features=256, out_features=num_classes)
+    def forward(self, state2d, state1d):  # (b, t, 5, 14, 14), (b, t, 12)
 
-    def forward(self, x):  # (b, 5, 14, 14)
+        conv_feats = []  # [(b, 128), ...]
+        for t in range(state2d.size(1)):
+            c = self.conv1(state2d[:, t, :, :, :])  # (b, 32, 12, 12)
+            c = self.conv2(c)  # (b, 64, 10, 10)
+            c = self.conv3(c)  # (b, 128, 6, 6)
+            c = self.avgpool(c)  # (b, 128, 1, 1)
+            c = c.view(c.size(0), -1)  # (b, 128)
+            conv_feats.append(c)
+        conv_feats = torch.stack(tensors=conv_feats, dim=0)  # (t, b, 128)
+        _, (conv_feats, _) = self.conv_lstm(input=conv_feats, hx=None)  # (1, b, 256)
+        conv_feats = conv_feats.squeeze(0)  # (b, 256)
 
-        if self.training:
-            self.step += 1
+        fc_feats = []  # [(b, 128), ...]
+        for t in range(state1d.size(1)):
+            f = self.fc1(state1d[:, t, :])  # (b, 32)
+            f = self.fc2(f)  # (b, 64)
+            f = self.fc3(f)  # (b, 128)
+            fc_feats.append(f)
+        fc_feats = torch.stack(tensors=fc_feats, dim=0)  # (t, b, 128)
+        _, (fc_feats, _) = self.fc_lstm(input=fc_feats, hx=None)  # (1, b, 256)
+        fc_feats = fc_feats.squeeze(0)  # (b, 256)
 
-        x1_3x3 = self.conv3x3_1(x)  # (b, 16, 12, 12)
-        x2_3x3 = self.conv3x3_2(x1_3x3)  # (b, 32, 10, 10)
-        x3_3x3 = self.conv3x3_3(x2_3x3)  # (b, 64, 8, 8)
+        feats = torch.cat(tensors=(conv_feats, fc_feats), dim=-1)  # (b, 512)
 
-        x1_5x5 = self.conv5x5_1(x)  # (b, 28, 10, 10)
-        x2_5x5 = self.conv5x5_2(x1_5x5)  # (b, 64, 8, 8)
+        x = self.pred1(feats)  # (b, 64)
 
-        x1_7x7 = self.conv7x7_1(x)  # (b, 64, 8, 8)
-
-        x = x3_3x3 + x2_5x5 + x1_7x7  # (b, 64, 8, 8)
-
-        x = x.flatten(start_dim=1)  # (b, 4096)
-
-        x = self.fc1(x)  # (b, 2048)
-        x = self.fc2(x)  # (b, 256)
-        x = self.fc3(x)  # (b, 4)
-
-        # if (self.step + 1) % 10000 == 0:
-        #     for i in range(x1_3x3.size(1)):
-        #         plt.imshow(x1_3x3[0, i].detach().cpu())
-        #         plt.title(f'x1_3x3 {i}')
-        #         plt.colorbar()
-        #         plt.show()
-        #
-        #     for i in range(x2_3x3.size(1)):
-        #         plt.imshow(x2_3x3[0, i].detach().cpu())
-        #         plt.title(f'x2_3x3 {i}')
-        #         plt.colorbar()
-        #         plt.show()
-        #
-        #     for i in range(x3_3x3.size(1)):
-        #         plt.imshow(x3_3x3[0, i].detach().cpu())
-        #         plt.title(f'x3_3x3 {i}')
-        #         plt.colorbar()
-        #         plt.show()
-        #
-        #     for i in range(x1_5x5.size(1)):
-        #         plt.imshow(x1_5x5[0, i].detach().cpu())
-        #         plt.title(f'x1_5x5 {i}')
-        #         plt.colorbar()
-        #         plt.show()
-        #
-        #     for i in range(x2_5x5.size(1)):
-        #         plt.imshow(x2_5x5[0, i].detach().cpu())
-        #         plt.title(f'x2_5x5 {i}')
-        #         plt.colorbar()
-        #         plt.show()
-        #
-        #     for i in range(x1_7x7.size(1)):
-        #         plt.imshow(x1_7x7[0, i].detach().cpu())
-        #         plt.title(f'x1_7x7 {i}')
-        #         plt.colorbar()
-        #         plt.show()
+        x = self.pred2(x)  # (b, 4)
 
         return x
 
     def save(self, file_name: str = 'Model.pth'):
         torch.save(obj=self.state_dict(), f=os.path.join(self.save_path, file_name))
+
+
